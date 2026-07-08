@@ -5,6 +5,13 @@ pipeline:
   orgIdentifier: default
   description: Build, push, and deploy the FastAPI proxy demo to Cloud Run (GCP project FastAPI-PR)
 
+  properties:
+    ci:
+      codebase:
+        connectorRef: account.github_taffeh
+        repoName: taffeh/fastapi-proxy-demo
+        build: <+input>
+
   variables:
     - name: GCP_PROJECT
       type: String
