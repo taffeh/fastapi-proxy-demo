@@ -1,0 +1,123 @@
+pipeline:
+  name: fastapi-proxy-deploy
+  identifier: fastapi_proxy_deploy
+  projectIdentifier: FastAPI_PR
+  orgIdentifier: default
+  description: Build, push, and deploy the FastAPI proxy demo to Cloud Run (GCP project FastAPI-PR)
+
+  variables:
+    - name: GCP_PROJECT
+      type: String
+      value: fastapi-pr
+    - name: REGION
+      type: String
+      value: europe-west1
+    - name: SERVICE_NAME
+      type: String
+      value: fastapi-proxy
+    - name: IMAGE
+      type: String
+      value: europe-west1-docker.pkg.dev/fastapi-pr/fastapi-proxy/app
+
+  stages:
+
+    # ------------------------------------------------------------------
+    # Stage 1 — Build & push image to Artifact Registry
+    # ------------------------------------------------------------------
+    - stage:
+        name: Build
+        identifier: build
+        type: CI
+        spec:
+          cloneCodebase: true
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+
+              - step:
+                  name: Authenticate and build push
+                  identifier: build_push
+                  type: Run
+                  spec:
+                    image: google/cloud-sdk:slim
+                    command: |
+                      # Write key file from secret
+                      echo "$GCP_SA_KEY" > /tmp/sa-key.json
+                      gcloud auth activate-service-account --key-file=/tmp/sa-key.json
+                      gcloud auth configure-docker europe-west1-docker.pkg.dev --quiet
+
+                      # Build and push
+                      IMAGE_TAG="<+variables.IMAGE>:<+pipeline.sequenceId>"
+                      docker build -t "$IMAGE_TAG" -t "<+variables.IMAGE>:latest" .
+                      docker push "$IMAGE_TAG"
+                      docker push "<+variables.IMAGE>:latest"
+                    envVariables:
+                      GCP_SA_KEY: <+secrets.getValue("gcp_fastapi_pr_key")>
+
+    # ------------------------------------------------------------------
+    # Stage 2 — Deploy to Cloud Run
+    # ------------------------------------------------------------------
+    - stage:
+        name: Deploy
+        identifier: deploy
+        type: CI
+        spec:
+          cloneCodebase: false
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+
+              - step:
+                  name: Deploy to Cloud Run
+                  identifier: cloud_run_deploy
+                  type: Run
+                  spec:
+                    image: google/cloud-sdk:slim
+                    command: |
+                      echo "$GCP_SA_KEY" > /tmp/sa-key.json
+                      gcloud auth activate-service-account --key-file=/tmp/sa-key.json
+
+                      gcloud run deploy <+variables.SERVICE_NAME> \
+                        --image "<+variables.IMAGE>:<+pipeline.sequenceId>" \
+                        --platform managed \
+                        --region <+variables.REGION> \
+                        --project <+variables.GCP_PROJECT> \
+                        --allow-unauthenticated \
+                        --port 8080 \
+                        --memory 512Mi \
+                        --min-instances 0 \
+                        --max-instances 10 \
+                        --set-env-vars PYTHONUNBUFFERED=1
+                    envVariables:
+                      GCP_SA_KEY: <+secrets.getValue("gcp_fastapi_pr_key")>
+
+              - step:
+                  name: Smoke test
+                  identifier: smoke_test
+                  type: Run
+                  spec:
+                    image: google/cloud-sdk:slim
+                    command: |
+                      echo "$GCP_SA_KEY" > /tmp/sa-key.json
+                      gcloud auth activate-service-account --key-file=/tmp/sa-key.json
+
+                      SERVICE_URL=$(gcloud run services describe <+variables.SERVICE_NAME> \
+                        --region <+variables.REGION> \
+                        --project <+variables.GCP_PROJECT> \
+                        --format 'value(status.url)')
+
+                      echo "Service URL: $SERVICE_URL"
+                      curl -sf "$SERVICE_URL/health" | grep '"status":"ok"'
+                      echo "Smoke test passed."
+                    envVariables:
+                      GCP_SA_KEY: <+secrets.getValue("gcp_fastapi_pr_key")>
