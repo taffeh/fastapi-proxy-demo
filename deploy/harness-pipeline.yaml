@@ -57,15 +57,16 @@ pipeline:
                     image: google/cloud-sdk:slim
                     command: |
                       # Write key file from secret
-                      echo "$GCP_SA_KEY" > /tmp/sa-key.json
+                      echo "$GCP_SA_KEY" | base64 -d > /tmp/sa-key.json
                       gcloud auth activate-service-account --key-file=/tmp/sa-key.json
                       gcloud auth configure-docker europe-west1-docker.pkg.dev --quiet
 
                       # Build and push
-                      IMAGE_TAG="<+variables.IMAGE>:<+pipeline.sequenceId>"
-                      docker build -t "$IMAGE_TAG" -t "<+variables.IMAGE>:latest" .
+                      IMAGE="<+pipeline.variables.IMAGE>"
+                      IMAGE_TAG="$IMAGE:<+pipeline.sequenceId>"
+                      docker build -t "$IMAGE_TAG" -t "$IMAGE:latest" .
                       docker push "$IMAGE_TAG"
-                      docker push "<+variables.IMAGE>:latest"
+                      docker push "$IMAGE:latest"
                     envVariables:
                       GCP_SA_KEY: <+secrets.getValue("gcp_fastapi_pr_key")>
 
@@ -94,14 +95,14 @@ pipeline:
                   spec:
                     image: google/cloud-sdk:slim
                     command: |
-                      echo "$GCP_SA_KEY" > /tmp/sa-key.json
+                      echo "$GCP_SA_KEY" | base64 -d > /tmp/sa-key.json
                       gcloud auth activate-service-account --key-file=/tmp/sa-key.json
 
-                      gcloud run deploy <+variables.SERVICE_NAME> \
-                        --image "<+variables.IMAGE>:<+pipeline.sequenceId>" \
+                      gcloud run deploy <+pipeline.variables.SERVICE_NAME> \
+                        --image "<+pipeline.variables.IMAGE>:<+pipeline.sequenceId>" \
                         --platform managed \
-                        --region <+variables.REGION> \
-                        --project <+variables.GCP_PROJECT> \
+                        --region <+pipeline.variables.REGION> \
+                        --project <+pipeline.variables.GCP_PROJECT> \
                         --allow-unauthenticated \
                         --port 8080 \
                         --memory 512Mi \
@@ -118,12 +119,12 @@ pipeline:
                   spec:
                     image: google/cloud-sdk:slim
                     command: |
-                      echo "$GCP_SA_KEY" > /tmp/sa-key.json
+                      echo "$GCP_SA_KEY" | base64 -d > /tmp/sa-key.json
                       gcloud auth activate-service-account --key-file=/tmp/sa-key.json
 
-                      SERVICE_URL=$(gcloud run services describe <+variables.SERVICE_NAME> \
-                        --region <+variables.REGION> \
-                        --project <+variables.GCP_PROJECT> \
+                      SERVICE_URL=$(gcloud run services describe <+pipeline.variables.SERVICE_NAME> \
+                        --region <+pipeline.variables.REGION> \
+                        --project <+pipeline.variables.GCP_PROJECT> \
                         --format 'value(status.url)')
 
                       echo "Service URL: $SERVICE_URL"
