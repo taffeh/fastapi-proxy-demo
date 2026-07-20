@@ -57,7 +57,7 @@ pipeline:
                     image: google/cloud-sdk:slim
                     command: |
                       # Write key file from secret
-                      echo "$GCP_SA_KEY" | base64 -d > /tmp/sa-key.json
+                      echo "$GCP_SA_KEY" > /tmp/sa-key.json
                       gcloud auth activate-service-account --key-file=/tmp/sa-key.json
                       gcloud auth configure-docker europe-west1-docker.pkg.dev --quiet
 
@@ -95,7 +95,7 @@ pipeline:
                   spec:
                     image: google/cloud-sdk:slim
                     command: |
-                      echo "$GCP_SA_KEY" | base64 -d > /tmp/sa-key.json
+                      echo "$GCP_SA_KEY" > /tmp/sa-key.json
                       gcloud auth activate-service-account --key-file=/tmp/sa-key.json
 
                       gcloud run deploy <+pipeline.variables.SERVICE_NAME> \
@@ -119,7 +119,7 @@ pipeline:
                   spec:
                     image: google/cloud-sdk:slim
                     command: |
-                      echo "$GCP_SA_KEY" | base64 -d > /tmp/sa-key.json
+                      echo "$GCP_SA_KEY" > /tmp/sa-key.json
                       gcloud auth activate-service-account --key-file=/tmp/sa-key.json
 
                       SERVICE_URL=$(gcloud run services describe <+pipeline.variables.SERVICE_NAME> \
